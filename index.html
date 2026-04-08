@@ -144,9 +144,14 @@
             opacity: 1;
         }
 
-        /* Minimal scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
+        /* Hide scrollbar but keep scrolling */
+        #editor {
+            scrollbar-width: none;       /* Firefox */
+            -ms-overflow-style: none;    /* IE/Edge */
+        }
+        
+        #editor::-webkit-scrollbar {
+            display: none;               /* Chrome, Safari */
         }
 
         ::-webkit-scrollbar-thumb {

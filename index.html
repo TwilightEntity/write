@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Write</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #f5f0e8;
+            --fg: #2c2a26;
+            --fg-muted: #9a9185;
+            --cursor: #2c2a26;
+            --saved-dot: #b5a898;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #1a1814;
+                --fg: #e8e2d8;
+                --fg-muted: #5c5750;
+                --cursor: #e8e2d8;
+                --saved-dot: #3d3a34;
+            }
+        }
+
+        html,
+        body {
+            height: 100%;
+            background-color: var(--bg);
+            transition: background-color 0.3s ease;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 80px 24px 60px;
+        }
+
+        #editor {
+            width: 100%;
+            max-width: 680px;
+            flex: 1;
+            min-height: calc(100vh - 140px);
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: 'Lora', Georgia, serif;
+            font-size: clamp(17px, 2vw, 20px);
+            line-height: 1.85;
+            color: var(--fg);
+            caret-color: var(--cursor);
+            letter-spacing: 0.01em;
+            overflow: hidden;
+        }
+
+        #editor::placeholder {
+            color: var(--fg-muted);
+            font-style: italic;
+        }
+
+        /* Status indicator */
+        #status {
+            position: fixed;
+            bottom: 28px;
+            right: 32px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 12px;
+            color: var(--fg-muted);
+            opacity: 0;
+            transition: opacity 0.6s ease;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        #status.visible {
+            opacity: 1;
+        }
+
+        #status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--fg-muted);
+            flex-shrink: 0;
+        }
+
+        #status.saving #status-dot {
+            background: #c8a96e;
+            animation: pulse 0.8s ease infinite;
+        }
+
+        #status.saved #status-dot {
+            background: #7aaa7a;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.7);
+            }
+        }
+
+        /* Word count */
+        #wordcount {
+            position: fixed;
+            bottom: 28px;
+            left: 32px;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 12px;
+            color: var(--fg-muted);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        #wordcount.visible {
+            opacity: 1;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 0px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <textarea id="editor" placeholder="Begin writing…" spellcheck="true" autocomplete="off" autocorrect="on"></textarea>
+
+    <div id="status">
+        <span id="status-dot"></span>
+        <span id="status-text">saved</span>
+    </div>
+
+    <div id="wordcount">0 words</div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const status = document.getElementById('status');
+        const statusTxt = document.getElementById('status-text');
+        const wc = document.getElementById('wordcount');
+
+        const STORAGE_KEY = 'minimalist-pad-content';
+        let saveTimer = null;
+        let hideTimer = null;
+        let hideWcTimer = null;
+
+        // ── Restore saved content ──────────────────────────────────────
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved && saved.trim() !== '') {
+            editor.value = saved;
+            updateWordCount();
+        }
+
+        // Auto-grow textarea
+        function autoGrow() {
+            editor.style.height = 'auto';
+            editor.style.height = editor.scrollHeight + 'px';
+        }
+        autoGrow();
+
+        // ── Word count ─────────────────────────────────────────────────
+        function updateWordCount() {
+            const text = editor.value.trim();
+            const words = text === '' ? 0 : text.split(/\s+/).length;
+            wc.textContent = words === 1 ? '1 word' : `${words} words`;
+        }
+
+        function showWordCount() {
+            wc.classList.add('visible');
+            clearTimeout(hideWcTimer);
+            hideWcTimer = setTimeout(() => wc.classList.remove('visible'), 2000);
+        }
+
+        // ── Save logic ─────────────────────────────────────────────────
+        function showStatus(state, text) {
+            clearTimeout(hideTimer);
+            status.className = 'visible ' + state;
+            statusTxt.textContent = text;
+        }
+
+        function hideStatus() {
+            hideTimer = setTimeout(() => status.classList.remove('visible'), 1800);
+        }
+
+        function saveNow() {
+            const content = editor.value.trim();
+
+            if (content === '') {
+                localStorage.removeItem(STORAGE_KEY);
+                showStatus('saved', 'cleared');
+            } else {
+                localStorage.setItem(STORAGE_KEY, editor.value);
+                showStatus('saved', 'saved');
+            }
+
+            hideStatus();
+        }
+
+        function scheduleSave() {
+            showStatus('saving', 'saving…');
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(saveNow, 2000);
+        }
+
+        // ── Events ─────────────────────────────────────────────────────
+        editor.addEventListener('input', () => {
+            autoGrow();
+            updateWordCount();
+            showWordCount();
+            scheduleSave();
+        });
+
+        // Save immediately on page hide/unload
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                clearTimeout(saveTimer);
+                saveNow();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            clearTimeout(saveTimer);
+            saveNow();
+        });
+
+        // Focus editor on load
+        editor.focus();
+    </script>
+</body>
+
+</html>

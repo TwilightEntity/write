@@ -25,7 +25,6 @@
             --fg: #2c2a26;
             --fg-muted: #9a9185;
             --cursor: #2c2a26;
-            --saved-dot: #b5a898;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -34,13 +33,7 @@
                 --fg: #e8e2d8;
                 --fg-muted: #5c5750;
                 --cursor: #e8e2d8;
-                --saved-dot: #3d3a34;
             }
-        }
-
-        html,
-        body {
-            height: 100%;
         }
 
         body {
@@ -48,20 +41,15 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: clamp(20px, 6vh, 80px) 24px clamp(20px, 5vh, 60px); /* ✅ responsive padding */
+            padding: clamp(20px, 6vh, 80px) 24px;
             background-color: var(--bg);
-            transition: background-color 0.3s ease;
         }
 
         #editor {
             width: 100%;
             max-width: 680px;
             flex: 1;
-            min-height: 0;
-            background: transparent;
-            border: none;
             outline: none;
-            resize: none;
             font-family: 'Lora', Georgia, serif;
             font-size: clamp(17px, 2vw, 20px);
             line-height: 1.85;
@@ -71,26 +59,28 @@
             overflow-y: auto;
         }
 
-        #editor::placeholder {
+        #editor p {
+            margin-bottom: 1.2em;
+        }
+
+        /* Placeholder */
+        #editor:empty::before {
+            content: "Begin writing…";
             color: var(--fg-muted);
             font-style: italic;
         }
 
-        /* Status indicator */
+        /* Status */
         #status {
             position: fixed;
             bottom: 28px;
             right: 32px;
             display: flex;
-            align-items: center;
             gap: 7px;
-            font-family: 'Lora', Georgia, serif;
             font-size: 12px;
             color: var(--fg-muted);
             opacity: 0;
-            transition: opacity 0.6s ease;
-            pointer-events: none;
-            user-select: none;
+            transition: 0.4s;
         }
 
         #status.visible {
@@ -102,30 +92,14 @@
             height: 6px;
             border-radius: 50%;
             background: var(--fg-muted);
-            flex-shrink: 0;
         }
 
         #status.saving #status-dot {
             background: #c8a96e;
-            animation: pulse 0.8s ease infinite;
         }
 
         #status.saved #status-dot {
             background: #7aaa7a;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.4;
-                transform: scale(0.7);
-            }
         }
 
         /* Word count */
@@ -133,40 +107,22 @@
             position: fixed;
             bottom: 28px;
             left: 32px;
-            font-family: 'Lora', Georgia, serif;
             font-size: 12px;
             color: var(--fg-muted);
             opacity: 0;
-            transition: opacity 0.4s ease;
-            pointer-events: none;
-            user-select: none;
+            transition: 0.4s;
         }
 
         #wordcount.visible {
             opacity: 1;
-        }
-
-        /* Hide scrollbar but keep scrolling */
-        #editor {
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-
-        #editor::-webkit-scrollbar {
-            display: none;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--fg-muted);
-            border-radius: 3px;
         }
     </style>
 </head>
 
 <body>
 
-    <textarea id="editor" placeholder="Begin writing…" spellcheck="true" autocomplete="off"
-        autocorrect="on"></textarea>
+    <!-- Editor -->
+    <div id="editor" contenteditable="true"></div>
 
     <div id="status">
         <span id="status-dot"></span>
@@ -182,82 +138,80 @@
         const wc = document.getElementById('wordcount');
 
         const STORAGE_KEY = 'minimalist-pad-content';
-        let saveTimer = null;
-        let hideTimer = null;
-        let hideWcTimer = null;
 
-        // Restore saved content
+        let saveTimer, hideTimer, wcTimer;
+
+        // Restore
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved && saved.trim() !== '') {
-            editor.value = saved;
+        if (saved) {
+            editor.innerHTML = saved;
             updateWordCount();
+        } else {
+            editor.innerHTML = "<p></p>";
         }
 
         // Word count
         function updateWordCount() {
-            const text = editor.value.trim();
-            const words = text === '' ? 0 : text.split(/\s+/).length;
-            wc.textContent = words === 1 ? '1 word' : `${words} words`;
+            const text = editor.innerText.trim();
+            const words = text ? text.split(/\s+/).length : 0;
+            wc.textContent = words === 1 ? "1 word" : words + " words";
         }
 
-        function showWordCount() {
+        function showWC() {
             wc.classList.add('visible');
-            clearTimeout(hideWcTimer);
-            hideWcTimer = setTimeout(() => wc.classList.remove('visible'), 2000);
+            clearTimeout(wcTimer);
+            wcTimer = setTimeout(() => wc.classList.remove('visible'), 2000);
         }
 
         // Status
         function showStatus(state, text) {
             clearTimeout(hideTimer);
-            status.className = 'visible ' + state;
+            status.className = "visible " + state;
             statusTxt.textContent = text;
         }
 
         function hideStatus() {
-            hideTimer = setTimeout(() => status.classList.remove('visible'), 1800);
+            hideTimer = setTimeout(() => status.classList.remove('visible'), 1500);
         }
 
         function saveNow() {
-            const content = editor.value.trim();
+            const content = editor.innerHTML.trim();
 
-            if (content === '') {
+            if (!content || content === "<p></p>") {
                 localStorage.removeItem(STORAGE_KEY);
-                showStatus('saved', 'cleared');
+                showStatus("saved", "cleared");
             } else {
-                localStorage.setItem(STORAGE_KEY, editor.value);
-                showStatus('saved', 'saved');
+                localStorage.setItem(STORAGE_KEY, content);
+                showStatus("saved", "saved");
             }
 
             hideStatus();
         }
 
         function scheduleSave() {
-            showStatus('saving', 'saving…');
+            showStatus("saving", "saving...");
             clearTimeout(saveTimer);
-            saveTimer = setTimeout(saveNow, 2000);
+            saveTimer = setTimeout(saveNow, 1500);
         }
 
-        // Events
-        editor.addEventListener('input', () => {
-            updateWordCount();
-            showWordCount();
-            scheduleSave();
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                clearTimeout(saveTimer);
-                saveNow();
+        // Ensure Enter creates paragraph
+        editor.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                document.execCommand("formatBlock", false, "p");
             }
         });
 
-        window.addEventListener('beforeunload', () => {
-            clearTimeout(saveTimer);
-            saveNow();
+        editor.addEventListener("input", () => {
+            updateWordCount();
+            showWC();
+            scheduleSave();
         });
+
+        window.addEventListener("beforeunload", saveNow);
 
         editor.focus();
     </script>
+
 </body>
 
 </html>
